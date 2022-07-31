@@ -6,6 +6,8 @@ using namespace std;
 MultiFloorNav::MultiFloorNav(){
     nav_state = MultiFloorNav::State::INIT_POSE;
     received_amcl_pose = false;
+    goal_active = false;
+    goal_sent = false;
     loop_rate = 1.0;
     max_angular_error = 0.0;
     max_linear_error = 0.0;
@@ -20,8 +22,11 @@ void MultiFloorNav::initialize(ros::NodeHandle& n){
 
     initial_pose_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("initialpose", 1, true);
     goal_pub = n.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal", 1);
+    cmd_vel_pub = n.advertise<geometry_msgs::Twist>("cmd_vel", 10);
 
     amcl_pose_sub = n.subscribe("amcl_pose", 1, &MultiFloorNav::amclPoseCallback, this);
+    odom_sub = n.subscribe("odometry/filtered", 1, &MultiFloorNav::odomCallback, this);
+    move_base_status_sub = n.subscribe("move_base/status", 1, &MultiFloorNav::movebaseStatusCallback, this);
 }
 
 void MultiFloorNav::amclPoseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg){
@@ -29,6 +34,13 @@ void MultiFloorNav::amclPoseCallback(const geometry_msgs::PoseWithCovarianceStam
     curr_pose.pose = msg->pose;
 }
 
+void MultiFloorNav::odomCallback(const nav_msgs::Odometry::ConstPtr& msg){
+    curr_odom = *msg;
+}
+
+void MultiFloorNav::movebaseStatusCallback(const actionlib_msgs::GoalStatusArray::ConstPtr& msg){
+    move_base_status_msg = *msg;
+}
 tf2::Quaternion MultiFloorNav::convertYawtoQuartenion(double yaw){
     tf2::Quaternion quat;
     quat.setRPY(0.0, 0.0, yaw);
@@ -75,6 +87,39 @@ bool MultiFloorNav::check_robot_pose(double ground_truth_x, double ground_truth_
     else 
         return false;
 }
+void MultiFloorNav::send_simple_goal(double x, double y, double z, double yaw){
+    geometry_msgs::PoseStamped goal;
+
+    goal.header.frame_id = "map";
+    goal.header.stamp = ros::Time::now();
+
+    goal.pose.position.x = x;
+    goal.pose.position.y = y;
+    goal.pose.position.z = z;
+    
+    tf2::Quaternion quat;
+    quat = convertYawtoQuartenion(yaw);
+    
+    goal.pose.orientation.x = quat[0];
+    goal.pose.orientation.y = quat[1];
+    goal.pose.orientation.z = quat[2];
+    goal.pose.orientation.w = quat[3];
+
+    ROS_INFO("[Multi Floor Nav] Sending Robot to x: %.1f, y: %.1f, z: %.1f, yaw: %.1f", x, y, z, yaw);
+    goal_pub.publish(goal);
+}
+
+void MultiFloorNav::send_cmd_vel(double x_vel=0.0, double theta_vel=0.0){
+    geometry_msgs::Twist cmd_vel;
+
+    cmd_vel.linear.x = x_vel;
+    cmd_vel.angular.z = theta_vel;
+    cmd_vel.linear.y = cmd_vel.linear.z = cmd_vel.angular.x = cmd_vel.angular.y = 0.0;
+
+    cmd_vel_pub.publish(cmd_vel);
+}
+
+
 
 void MultiFloorNav::execute(){
     switch(nav_state){
@@ -86,13 +131,31 @@ void MultiFloorNav::execute(){
         case MultiFloorNav::State::CHECK_INITPOSE:
             if(check_robot_pose(4.0, -5.0, 0.0)){
                 ROS_INFO("[Multi Floor Nav] Robot at correct pose");
-                nav_state = MultiFloorNav::State::DONE;
+                nav_state = MultiFloorNav::State::NAV_TO_WP_1;
             }
             else{
                 ROS_INFO("[Multi Floor Nav] Setting initial pose failed. Will Retry");
                 nav_state = MultiFloorNav::State::INIT_POSE;
             }
             break;
+            case MultiFloorNav::State::NAV_TO_WP_1:
+                ROS_INFO_ONCE("[Multi Floor Nav] Will send goal to x: %.f, y: %.f, z: %.f", 3.0, -0.5, 0.5); 
+                if(!goal_sent){
+                    send_simple_goal(3.0, -0.5, 0.5, M_PI);
+                    goal_sent = true;
+                }
+                if(!move_base_status_msg.status_list.empty()){
+                    if(move_base_status_msg.status_list[0].status == actionlib_msgs::GoalStatus::ACTIVE){
+                    goal_active = true;
+                    }
+                    else if(goal_active && move_base_status_msg.status_list[0].status == actionlib_msgs::GoalStatus::SUCCEEDED){
+                    nav_state = MultiFloorNav::State::DONE;
+                    goal_sent = goal_active = false;
+                    first_odom = curr_odom;
+                    send_cmd_vel(); //stops the amr in case of still oscillating (theorectically shouldn't)
+                    }
+                }
+                break;
         case MultiFloorNav::State::DONE:
             ROS_INFO_ONCE("Robot arrived at Goal");
             break;
