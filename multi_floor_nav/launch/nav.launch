@@ -8,7 +8,9 @@
     <arg name="headless" default="false"/>
     <arg name="debug" default="false"/>
     <arg name="world_name" default="$(find jackal_elevator)/worlds/modified_elevator.world" />
-    <arg name="map_file" default="$(find multi_floor_nav)/maps/map_level0.yaml"/> <!-- Generate map using SLAM, put map in the appropriate folder and refer here -->
+    <arg name="map_file0" default="$(find multi_floor_nav)/maps/map_level0.yaml"/>
+    <arg name="map_file1" default="$(find multi_floor_nav)/maps/map_level1.yaml"/>
+    
     <arg name="config" default="navigation" />
     <arg name="front_laser" default="true" />
     <arg name="scan_topic" default="front/scan" />
@@ -23,7 +25,14 @@
     </include>
 
     <!-- Run the map server -->
-    <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)" />
+    <!-- Load level 0 map -->
+    <node name="map_server0" pkg="map_server" type="map_server" args="$(arg map_file0)">
+        <remap from="map" to="map_level_0"/>
+    </node>
+    <!-- Load level 1 map -->
+    <node name="map_server1" pkg="map_server" type="map_server" args="$(arg map_file1)">
+        <remap from="map" to="map_level_1"/>
+    </node>
 
     <!--- Run AMCL -->
     <node pkg="amcl" type="amcl" name="amcl">
@@ -47,9 +56,12 @@
 
         <remap from="odom" to="odometry/filtered" />
     </node>
+
     <!--- Run Jackal RViz -->  
     <include file="$(find jackal_viz)/launch/view_robot.launch">
         <arg name="config" value="$(arg config)"/>    
     </include>
+    <!-- Run Change Map Node -->
+    <node pkg="multi_floor_nav" type="change_map_node" name="change_map_node"/>
 
     </launch>
