@@ -7,6 +7,7 @@
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "nav_msgs/Odometry.h"
 #include "actionlib_msgs/GoalStatusArray.h"
+#include "std_msgs/String.h"
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf/tf.h>
@@ -20,13 +21,15 @@ class MultiFloorNav{
             INIT_POSE,
             CHECK_INITPOSE, 
             NAV_TO_WP_1,
-            ALIGN_ROBOT_LIFT_LEVEL_0, 
+            ALIGN_ROBOT_LIFT_LEVEL_0,
+            SEND_LIFT_0,
+            ENTER_LIFT_LEVEL_0, 
             DONE
         };
         State nav_state;
         bool received_amcl_pose, goal_sent, goal_active;
         double loop_rate, max_linear_error, max_angular_error;
-        ros::Publisher initial_pose_pub, goal_pub, cmd_vel_pub;
+        ros::Publisher initial_pose_pub, goal_pub, cmd_vel_pub, elevator_pub;
         ros::Subscriber amcl_pose_sub, odom_sub, move_base_status_sub;
         geometry_msgs::PoseWithCovarianceStamped curr_pose;
         nav_msgs::Odometry curr_odom, first_odom;
@@ -44,6 +47,12 @@ class MultiFloorNav{
         void send_cmd_vel(double x_vel, double theta_vel);
         double getYawOffset(geometry_msgs::Quaternion A, geometry_msgs::Quaternion B);
         void align_yaw(double yaw_offset, double angular_vel);
+        void request_lift(std::string floor);
+        double dist(geometry_msgs::Point A, geometry_msgs::Point B);
+        double length(double x, double y, double z = 0);
+        double getPositionOffset(geometry_msgs::Point A, geometry_msgs::Point B);
+        bool reached_distance(double distance);
+
 
 
 

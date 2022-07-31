@@ -25,7 +25,8 @@ void MultiFloorNav::initialize(ros::NodeHandle& n){
     initial_pose_pub = n.advertise<geometry_msgs::PoseWithCovarianceStamped>("initialpose", 1, true);
     goal_pub = n.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal", 1);
     cmd_vel_pub = n.advertise<geometry_msgs::Twist>("cmd_vel", 10);
-
+    elevator_pub = n.advertise<std_msgs::String>("elevator", 1, true);
+    
     amcl_pose_sub = n.subscribe("amcl_pose", 1, &MultiFloorNav::amclPoseCallback, this);
     odom_sub = n.subscribe("odometry/filtered", 1, &MultiFloorNav::odomCallback, this);
     move_base_status_sub = n.subscribe("move_base/status", 1, &MultiFloorNav::movebaseStatusCallback, this);
@@ -139,6 +140,34 @@ void MultiFloorNav::align_yaw(double yaw_offset, double angular_vel){
         send_cmd_vel(0.0,angular_vel);
 }
 
+void MultiFloorNav::request_lift(string floor){
+    std_msgs::String floor_id;
+
+    floor_id.data = floor;
+
+    elevator_pub.publish(floor_id);
+}
+
+double MultiFloorNav::dist(geometry_msgs::Point A, geometry_msgs::Point B) {
+  return length(B.x - A.x, B.y - A.y, A.z - B.z);
+}
+
+double MultiFloorNav::length(double diff_x, double diff_y, double diff_z) {
+  return sqrt(diff_x * diff_x + diff_y * diff_y + diff_z * diff_z);
+}
+double MultiFloorNav::getPositionOffset(geometry_msgs::Point A, geometry_msgs::Point B) {
+  return dist(A, B);
+}   
+
+bool MultiFloorNav::reached_distance(double distance){
+  double distance_travelled = getPositionOffset(
+    curr_odom.pose.pose.position, first_odom.pose.pose.position);
+  if(distance_travelled >= distance){
+    return true;
+  }
+  return false;
+}
+
 void MultiFloorNav::execute(){
     ROS_INFO("[Multi Floor Nav] State: %d", nav_state);
     switch(nav_state){
@@ -182,12 +211,27 @@ void MultiFloorNav::execute(){
             desired_yaw = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.0, M_PI);
             yaw_diff = getYawOffset(current_yaw, desired_yaw);
             if(abs(yaw_diff) > max_angular_error){
-                align_yaw(yaw_diff, 0.1);
+                align_yaw(yaw_diff, 0.2);
             }
             else{
                 send_cmd_vel();
-                nav_state = MultiFloorNav::State::DONE;
+                nav_state = MultiFloorNav::State::SEND_LIFT_0;
             }
+            break;
+        case MultiFloorNav::State::SEND_LIFT_0:
+            request_lift("0");
+            nav_state= MultiFloorNav::State::ENTER_LIFT_LEVEL_0;
+            break;
+
+        case MultiFloorNav::State::ENTER_LIFT_LEVEL_0:
+            // request_lift("0");
+            send_cmd_vel(0.25); 
+            if(reached_distance(3.0)){
+                send_cmd_vel();
+                nav_state= MultiFloorNav::State::DONE;
+                first_odom = curr_odom;
+                ros::Duration(5).sleep(); // wait 5 sec for the lift to close
+            }      
             break;
         case MultiFloorNav::State::DONE:
             ROS_INFO_ONCE("Robot arrived at Goal");
