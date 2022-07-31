@@ -19,7 +19,8 @@ class MultiFloorNav{
         enum State{
             INIT_POSE,
             CHECK_INITPOSE, 
-            NAV_TO_WP_1, 
+            NAV_TO_WP_1,
+            ALIGN_ROBOT_LIFT_LEVEL_0, 
             DONE
         };
         State nav_state;
@@ -30,6 +31,7 @@ class MultiFloorNav{
         geometry_msgs::PoseWithCovarianceStamped curr_pose;
         nav_msgs::Odometry curr_odom, first_odom;
         actionlib_msgs::GoalStatusArray move_base_status_msg;
+        geometry_msgs::Quaternion current_yaw, desired_yaw;
 
 
         tf2::Quaternion convertYawtoQuartenion(double yaw);
@@ -40,6 +42,9 @@ class MultiFloorNav{
         bool check_robot_pose(double x, double y, double yaw);
         void send_simple_goal(double x, double y, double z, double yaw);
         void send_cmd_vel(double x_vel, double theta_vel);
+        double getYawOffset(geometry_msgs::Quaternion A, geometry_msgs::Quaternion B);
+        void align_yaw(double yaw_offset, double angular_vel);
+
 
 
     public:
