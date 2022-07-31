@@ -24,6 +24,8 @@ class MultiFloorNav{
             ALIGN_ROBOT_LIFT_LEVEL_0,
             SEND_LIFT_0,
             ENTER_LIFT_LEVEL_0, 
+            SEND_LIFT_1,
+            EXIT_LIFT_LEVEL_1,
             DONE
         };
         State nav_state;

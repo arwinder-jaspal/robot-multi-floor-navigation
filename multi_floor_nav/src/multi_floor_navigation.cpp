@@ -228,10 +228,25 @@ void MultiFloorNav::execute(){
             send_cmd_vel(0.25); 
             if(reached_distance(3.0)){
                 send_cmd_vel();
-                nav_state= MultiFloorNav::State::DONE;
+                nav_state= MultiFloorNav::State::SEND_LIFT_1;
                 first_odom = curr_odom;
                 ros::Duration(5).sleep(); // wait 5 sec for the lift to close
             }      
+            break;
+        case MultiFloorNav::State::SEND_LIFT_1:
+            request_lift("1");
+            ros::Duration(7).sleep(); // wait 7 secs for the lift to travel to level 1 and open
+            nav_state= MultiFloorNav::State::EXIT_LIFT_LEVEL_1;
+            break;
+
+        case MultiFloorNav::State::EXIT_LIFT_LEVEL_1:
+            request_lift("1");
+            send_cmd_vel(-0.25); 
+            if(reached_distance(3.0)){
+                send_cmd_vel();
+                nav_state= MultiFloorNav::State::DONE;
+                first_odom = curr_odom;
+            }
             break;
         case MultiFloorNav::State::DONE:
             ROS_INFO_ONCE("Robot arrived at Goal");
