@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!--- Run Jackal Gazebo -->  
+    <arg name="paused" default="false"/>
+    <arg name="use_sim_time" default="true"/>
+    <arg name="gui" default="true"/>
+    <arg name="headless" default="false"/>
+    <arg name="debug" default="false"/>
+    <arg name="world_name" default="$(find jackal_elevator)/worlds/modified_elevator.world" />
+    <arg name="map_file" default="$(find multi_floor_nav)/maps/map_level0.yaml"/> <!-- Generate map using SLAM, put map in the appropriate folder and refer here -->
+    <arg name="config" default="navigation" />
+    <arg name="front_laser" default="true" />
+    <arg name="scan_topic" default="front/scan" />
+
+    <!-- Launch Gazebo with the specified world -->
+    <include file="$(find jackal_elevator)/launch/jackal_repos_world.launch">
+        <arg name="gui" value="$(arg gui)" />
+        <arg name="use_sim_time" value="$(arg use_sim_time)" />
+        <arg name="headless" value="$(arg headless)" />
+        <arg name="world_name" value="$(arg world_name)" />
+        <arg name="front_laser" value="$(arg front_laser)" />
+    </include>
+
+    <!-- Run the map server -->
+    <node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)" />
+
+    <!--- Run AMCL -->
+    <node pkg="amcl" type="amcl" name="amcl">
+        <remap from="scan" to="$(arg scan_topic)"/>
+        <rosparam file="$(find multi_floor_nav)/configs/amcl.yaml" command="load"/>
+    </node>
+
+    <!--- Run Move Base -->
+    <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
+        <rosparam file="$(find multi_floor_nav)/configs/costmap_common_params.yaml" command="load" ns="global_costmap" />
+        <rosparam file="$(find multi_floor_nav)/configs/costmap_common_params.yaml" command="load" ns="local_costmap" />
+
+        <rosparam file="$(find jackal_navigation)/params/map_nav_params/local_costmap_params.yaml" command="load" />
+        <rosparam file="$(find jackal_navigation)/params/map_nav_params/global_costmap_params.yaml" command="load" />
+
+        <rosparam file="$(find multi_floor_nav)/configs/base_local_planner_params.yaml" command="load" />
+        <rosparam file="$(find jackal_navigation)/params/move_base_params.yaml" command="load" />
+
+        <param name="base_global_planner" type="string" value="navfn/NavfnROS" />
+        <param name="base_local_planner" value="base_local_planner/TrajectoryPlannerROS"/>
+
+        <remap from="odom" to="odometry/filtered" />
+    </node>
+    <!--- Run Jackal RViz -->  
+    <include file="$(find jackal_viz)/launch/view_robot.launch">
+        <arg name="config" value="$(arg config)"/>    
+    </include>
+
+    </launch>
