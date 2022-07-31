@@ -1,0 +1,4 @@
+int32 req_int
+---
+bool success
+string message
