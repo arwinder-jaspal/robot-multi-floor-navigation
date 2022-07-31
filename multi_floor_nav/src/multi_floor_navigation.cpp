@@ -4,7 +4,7 @@
 using namespace std;
 
 MultiFloorNav::MultiFloorNav(){
-    nav_state = MultiFloorNav::State::INIT_POSE;
+    nav_state = MultiFloorNav::State::LOAD_MAP;
     received_amcl_pose = false;
     goal_active = false;
     goal_sent = false;
@@ -12,7 +12,8 @@ MultiFloorNav::MultiFloorNav(){
     max_angular_error = 0.0;
     max_linear_error = 0.0;
     curr_odom.pose.pose.orientation = first_odom.pose.pose.orientation =
-        tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.0, 0.0); 
+        tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.0, 0.0);
+    desired_map_level = 0; 
 }
 
 void MultiFloorNav::initialize(ros::NodeHandle& n){
@@ -30,6 +31,8 @@ void MultiFloorNav::initialize(ros::NodeHandle& n){
     amcl_pose_sub = n.subscribe("amcl_pose", 1, &MultiFloorNav::amclPoseCallback, this);
     odom_sub = n.subscribe("odometry/filtered", 1, &MultiFloorNav::odomCallback, this);
     move_base_status_sub = n.subscribe("move_base/status", 1, &MultiFloorNav::movebaseStatusCallback, this);
+
+    change_map_client = n.serviceClient<multi_floor_nav::IntTrigger>("change_map");
 }
 
 void MultiFloorNav::amclPoseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg){
@@ -51,37 +54,37 @@ tf2::Quaternion MultiFloorNav::convertYawtoQuartenion(double yaw){
     return quat;
 }
 
-void MultiFloorNav::init_pose(double x, double y, double z, double yaw){
+void MultiFloorNav::set_init_pose(geometry_msgs::Pose2D pose){
     geometry_msgs::PoseWithCovarianceStamped init_pose;
 
     init_pose.header.frame_id = "map";
     init_pose.header.stamp = ros::Time::now();
 
-    init_pose.pose.pose.position.x = x;
-    init_pose.pose.pose.position.y = y;
-    init_pose.pose.pose.position.z = z;
+    init_pose.pose.pose.position.x = pose.x;
+    init_pose.pose.pose.position.y = pose.y;
+    init_pose.pose.pose.position.z = 0.0;
 
     tf2::Quaternion quat;
-    quat = convertYawtoQuartenion(yaw);
+    quat = convertYawtoQuartenion(pose.theta);
 
     init_pose.pose.pose.orientation.x= quat[0];
     init_pose.pose.pose.orientation.y= quat[1];
     init_pose.pose.pose.orientation.z= quat[2];
     init_pose.pose.pose.orientation.w= quat[3];
 
-    ROS_INFO("[Multi Floor Nav] Initializing Robot at x: %.1f, y: %.1f, z: %.1f, yaw: %.1f", x, y, z, yaw);
+    ROS_INFO("[Multi Floor Nav] Initializing Robot at x: %.1f, y: %.1f, yaw: %.1f", pose.x, pose.y, pose.theta);
     initial_pose_pub.publish(init_pose);
 }
-bool MultiFloorNav::check_robot_pose(double ground_truth_x, double ground_truth_y, double ground_truth_yaw){
+bool MultiFloorNav::check_robot_pose(geometry_msgs::Pose2D pose){
     while (!received_amcl_pose);
     
     double amcl_x = curr_pose.pose.pose.position.x;
     double amcl_y = curr_pose.pose.pose.position.y;
-    double diff_x = fabs(ground_truth_x - amcl_x);
-    double diff_y = fabs(ground_truth_y - amcl_y);
+    double diff_x = fabs(pose.x - amcl_x);
+    double diff_y = fabs(pose.y - amcl_y);
     double linear_error = sqrt(pow(diff_x,2) + pow(diff_y,2)); //Find linear error
     double amcl_yaw = tf::getYaw(curr_pose.pose.pose.orientation);
-    double angular_error = fabs(angles::normalize_angle(ground_truth_yaw-amcl_yaw));
+    double angular_error = fabs(angles::normalize_angle(pose.theta-amcl_yaw));
     ROS_INFO(
         "[Multi Floor Nav] Current Robot Pose, x: %.2f, y: %.2f, yaw: %.2f",amcl_x, amcl_y, amcl_yaw);
     ROS_INFO("[Multi Floor Nav] Linear Error: %.2f, Angular Error: %.2f",linear_error, angular_error);
@@ -90,25 +93,25 @@ bool MultiFloorNav::check_robot_pose(double ground_truth_x, double ground_truth_
     else 
         return false;
 }
-void MultiFloorNav::send_simple_goal(double x, double y, double z, double yaw){
+void MultiFloorNav::send_simple_goal(geometry_msgs::Pose2D goal_pose){
     geometry_msgs::PoseStamped goal;
 
     goal.header.frame_id = "map";
     goal.header.stamp = ros::Time::now();
 
-    goal.pose.position.x = x;
-    goal.pose.position.y = y;
-    goal.pose.position.z = z;
+    goal.pose.position.x = goal_pose.x;
+    goal.pose.position.y = goal_pose.y;
     
     tf2::Quaternion quat;
-    quat = convertYawtoQuartenion(yaw);
+    quat = convertYawtoQuartenion(goal_pose.theta);
     
     goal.pose.orientation.x = quat[0];
     goal.pose.orientation.y = quat[1];
     goal.pose.orientation.z = quat[2];
     goal.pose.orientation.w = quat[3];
 
-    ROS_INFO("[Multi Floor Nav] Sending Robot to x: %.1f, y: %.1f, z: %.1f, yaw: %.1f", x, y, z, yaw);
+    ROS_INFO("[Multi Floor Nav] Sending Robot to x: %.1f, y: %.1f, yaw: %.1f", 
+        goal_pose.x, goal_pose.y, goal_pose.theta);
     goal_pub.publish(goal);
 }
 
@@ -171,15 +174,40 @@ bool MultiFloorNav::reached_distance(double distance){
 void MultiFloorNav::execute(){
     ROS_INFO("[Multi Floor Nav] State: %d", nav_state);
     switch(nav_state){
+        // case MultiFloorNav::State::SET_DESIRED_LEVEL:
+        //     set_desired_level(desired_map_level);
+        //     nav_state = MultiFloorNav::State::LOAD_MAP;
+        //     break;
+        case MultiFloorNav::State::LOAD_MAP:
+            // multi_floor_nav::IntTrigger srv;
+            srv.request.req_int = desired_map_level;
+            if(change_map_client.call(srv)){
+                ROS_INFO("[Multi Floor Nav] %s", srv.response.message.c_str());
+                if(desired_map_level == 0){
+                    desired_init_pose.x = 4.0;
+                    desired_init_pose.y = -5.0;
+                    desired_init_pose.theta = 0.0;
+                }
+                else{
+                    desired_init_pose.x = 3.0;
+                    desired_init_pose.y = -0.5;
+                    desired_init_pose.theta = M_PI;
+                }
+                nav_state = MultiFloorNav::State::INIT_POSE;
+            }
+            else{
+                ROS_INFO("[Multi Floor Nav] Failed to load map for level %d", desired_map_level);
+            }
+            break;
         case MultiFloorNav::State::INIT_POSE:
-            init_pose(4.0,-5.0, 0.5, 0.0);
+            set_init_pose(desired_init_pose);
             nav_state = MultiFloorNav::State::CHECK_INITPOSE;
             ros::Duration(1.0).sleep();
             break;
         case MultiFloorNav::State::CHECK_INITPOSE:
-            if(check_robot_pose(4.0, -5.0, 0.0)){
+            if(check_robot_pose(desired_init_pose)){
                 ROS_INFO("[Multi Floor Nav] Robot at correct pose");
-                nav_state = MultiFloorNav::State::NAV_TO_WP_1;
+                nav_state = MultiFloorNav::State::NAV_TO_GOAL;
                 ros::Duration(1.0).sleep();
             }
             else{
@@ -187,10 +215,20 @@ void MultiFloorNav::execute(){
                 nav_state = MultiFloorNav::State::INIT_POSE;
             }
             break;
-        case MultiFloorNav::State::NAV_TO_WP_1:
+        case MultiFloorNav::State::NAV_TO_GOAL:
             ROS_INFO_ONCE("[Multi Floor Nav] Will send goal to x: %.f, y: %.f, z: %.f", 3.0, -0.5, 0.5); 
             if(!goal_sent){
-                send_simple_goal(3.0, -0.5, 0.5, M_PI);
+                if(desired_map_level ==0 ){
+                    desired_goal_pose.x = 3.0;
+                    desired_goal_pose.y =-0.5;
+                    desired_goal_pose.theta = M_PI;                    
+                }
+                else{
+                    desired_goal_pose.x = 4.0;
+                    desired_goal_pose.y = 5.0;
+                    desired_goal_pose.theta = 0.0;    
+                }
+                send_simple_goal(desired_goal_pose);
                 goal_sent = true;
             }
             if(!move_base_status_msg.status_list.empty()){
@@ -198,7 +236,10 @@ void MultiFloorNav::execute(){
                 goal_active = true;
                 }
                 else if(goal_active && move_base_status_msg.status_list[0].status == actionlib_msgs::GoalStatus::SUCCEEDED){
-                nav_state = MultiFloorNav::State::ALIGN_ROBOT_LIFT_LEVEL_0;
+                if(desired_map_level == 0)
+                    nav_state = MultiFloorNav::State::SEND_LIFT_0;
+                else
+                    nav_state = MultiFloorNav::State::DONE;
                 goal_sent = goal_active = false;
                 first_odom = curr_odom;
                 send_cmd_vel(); //stops the amr in case of still oscillating (theorectically shouldn't)
@@ -244,8 +285,9 @@ void MultiFloorNav::execute(){
             send_cmd_vel(-0.25); 
             if(reached_distance(3.0)){
                 send_cmd_vel();
-                nav_state= MultiFloorNav::State::DONE;
+                nav_state= MultiFloorNav::State::LOAD_MAP;
                 first_odom = curr_odom;
+                desired_map_level = 1;
             }
             break;
         case MultiFloorNav::State::DONE:

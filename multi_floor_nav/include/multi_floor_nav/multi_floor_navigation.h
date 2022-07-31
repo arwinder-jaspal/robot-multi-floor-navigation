@@ -3,24 +3,29 @@
 
 #include <ros/ros.h>
 
+
 #include "geometry_msgs/PoseStamped.h"
 #include "geometry_msgs/PoseWithCovarianceStamped.h"
 #include "nav_msgs/Odometry.h"
 #include "actionlib_msgs/GoalStatusArray.h"
 #include "std_msgs/String.h"
+#include "std_msgs/Int32.h"
+#include "geometry_msgs/Pose2D.h"
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf/tf.h>
 #include <angles/angles.h>
 #include <math.h>
+#include <multi_floor_nav/IntTrigger.h>
 
 
 class MultiFloorNav{
     private:
         enum State{
+            LOAD_MAP,
             INIT_POSE,
             CHECK_INITPOSE, 
-            NAV_TO_WP_1,
+            NAV_TO_GOAL,
             ALIGN_ROBOT_LIFT_LEVEL_0,
             SEND_LIFT_0,
             ENTER_LIFT_LEVEL_0, 
@@ -29,23 +34,27 @@ class MultiFloorNav{
             DONE
         };
         State nav_state;
+        int desired_map_level;
         bool received_amcl_pose, goal_sent, goal_active;
         double loop_rate, max_linear_error, max_angular_error;
         ros::Publisher initial_pose_pub, goal_pub, cmd_vel_pub, elevator_pub;
         ros::Subscriber amcl_pose_sub, odom_sub, move_base_status_sub;
+        ros::ServiceClient change_map_client;
         geometry_msgs::PoseWithCovarianceStamped curr_pose;
         nav_msgs::Odometry curr_odom, first_odom;
         actionlib_msgs::GoalStatusArray move_base_status_msg;
         geometry_msgs::Quaternion current_yaw, desired_yaw;
+        geometry_msgs::Pose2D desired_init_pose, desired_goal_pose;
+        multi_floor_nav::IntTrigger srv;
 
-
-        tf2::Quaternion convertYawtoQuartenion(double yaw);
         void amclPoseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg);
         void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
         void movebaseStatusCallback(const actionlib_msgs::GoalStatusArray::ConstPtr& msg);
-        void init_pose(double x, double y, double z, double yaw);
-        bool check_robot_pose(double x, double y, double yaw);
-        void send_simple_goal(double x, double y, double z, double yaw);
+
+        tf2::Quaternion convertYawtoQuartenion(double yaw);
+        void set_init_pose(geometry_msgs::Pose2D pose);
+        bool check_robot_pose(geometry_msgs::Pose2D pose);
+        void send_simple_goal(geometry_msgs::Pose2D goal_pose);
         void send_cmd_vel(double x_vel, double theta_vel);
         double getYawOffset(geometry_msgs::Quaternion A, geometry_msgs::Quaternion B);
         void align_yaw(double yaw_offset, double angular_vel);
@@ -54,9 +63,7 @@ class MultiFloorNav{
         double length(double x, double y, double z = 0);
         double getPositionOffset(geometry_msgs::Point A, geometry_msgs::Point B);
         bool reached_distance(double distance);
-
-
-
+        void set_desired_level(int level_id);
 
     public:
         MultiFloorNav();
