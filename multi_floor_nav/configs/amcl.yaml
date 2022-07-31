@@ -17,6 +17,8 @@ initial_pose_x : 0.0
 initial_pose_y : 0.0
 initial_pose_a : 0.0
 
+update_min_a: 0.3927
+
 gui_publish_rate : 10.0
 
 use_map_topic: False
@@ -37,7 +39,7 @@ expected_laser_freq: 5.0
 laser_model_type : likelihood_field  
 
 # Odometry model parameters 
-odom_model_type : diff-corrected
+odom_model_type : diff
 odom_alpha1 : 0.2
 odom_alpha2 : 0.2
 odom_alpha3 : 0.2 
