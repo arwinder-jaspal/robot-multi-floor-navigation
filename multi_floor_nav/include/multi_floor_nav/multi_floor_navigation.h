@@ -11,6 +11,7 @@
 #include "std_msgs/String.h"
 #include "std_msgs/Int32.h"
 #include "geometry_msgs/Pose2D.h"
+#include "std_msgs/Empty.h"
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf/tf.h>
@@ -35,10 +36,10 @@ class MultiFloorNav{
         };
         State nav_state;
         int desired_map_level;
-        bool received_amcl_pose, goal_sent, goal_active;
+        bool received_amcl_pose, goal_sent, goal_active, to_start;
         double loop_rate, max_linear_error, max_angular_error;
         ros::Publisher initial_pose_pub, goal_pub, cmd_vel_pub, elevator_pub;
-        ros::Subscriber amcl_pose_sub, odom_sub, move_base_status_sub;
+        ros::Subscriber amcl_pose_sub, odom_sub, move_base_status_sub, start_sub;
         ros::ServiceClient change_map_client;
         geometry_msgs::PoseWithCovarianceStamped curr_pose;
         nav_msgs::Odometry curr_odom, first_odom;
@@ -50,6 +51,7 @@ class MultiFloorNav{
         void amclPoseCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg);
         void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
         void movebaseStatusCallback(const actionlib_msgs::GoalStatusArray::ConstPtr& msg);
+        void startCallback(const std_msgs::Empty::ConstPtr& msg);
 
         tf2::Quaternion convertYawtoQuartenion(double yaw);
         void set_init_pose(geometry_msgs::Pose2D pose);

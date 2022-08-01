@@ -8,6 +8,7 @@ MultiFloorNav::MultiFloorNav(){
     received_amcl_pose = false;
     goal_active = false;
     goal_sent = false;
+    to_start = false;
     loop_rate = 1.0;
     max_angular_error = 0.0;
     max_linear_error = 0.0;
@@ -27,10 +28,11 @@ void MultiFloorNav::initialize(ros::NodeHandle& n){
     goal_pub = n.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal", 1);
     cmd_vel_pub = n.advertise<geometry_msgs::Twist>("cmd_vel", 10);
     elevator_pub = n.advertise<std_msgs::String>("elevator", 1, true);
-    
+        
     amcl_pose_sub = n.subscribe("amcl_pose", 1, &MultiFloorNav::amclPoseCallback, this);
     odom_sub = n.subscribe("odometry/filtered", 1, &MultiFloorNav::odomCallback, this);
     move_base_status_sub = n.subscribe("move_base/status", 1, &MultiFloorNav::movebaseStatusCallback, this);
+    start_sub = n.subscribe("start",1, &MultiFloorNav::startCallback, this);
 
     change_map_client = n.serviceClient<multi_floor_nav::IntTrigger>("change_map");
 }
@@ -47,6 +49,11 @@ void MultiFloorNav::odomCallback(const nav_msgs::Odometry::ConstPtr& msg){
 void MultiFloorNav::movebaseStatusCallback(const actionlib_msgs::GoalStatusArray::ConstPtr& msg){
     move_base_status_msg = *msg;
 }
+
+void MultiFloorNav::startCallback(const std_msgs::Empty::ConstPtr& msg){
+    to_start = true;
+}
+
 tf2::Quaternion MultiFloorNav::convertYawtoQuartenion(double yaw){
     tf2::Quaternion quat;
     quat.setRPY(0.0, 0.0, yaw);
@@ -172,35 +179,32 @@ bool MultiFloorNav::reached_distance(double distance){
 }
 
 void MultiFloorNav::execute(){
-    ROS_INFO("[Multi Floor Nav] State: %d", nav_state);
     switch(nav_state){
-        // case MultiFloorNav::State::SET_DESIRED_LEVEL:
-        //     set_desired_level(desired_map_level);
-        //     nav_state = MultiFloorNav::State::LOAD_MAP;
-        //     break;
         case MultiFloorNav::State::LOAD_MAP:
-            // multi_floor_nav::IntTrigger srv;
-            srv.request.req_int = desired_map_level;
-            if(change_map_client.call(srv)){
-                ROS_INFO("[Multi Floor Nav] %s", srv.response.message.c_str());
-                if(desired_map_level == 0){
-                    desired_init_pose.x = 4.0;
-                    desired_init_pose.y = -5.0;
-                    desired_init_pose.theta = 0.0;
+            if(to_start){
+                srv.request.req_int = desired_map_level;
+                if(change_map_client.call(srv)){
+                    ROS_INFO("[Multi Floor Nav] %s", srv.response.message.c_str());
+                    if(desired_map_level == 0){
+                        desired_init_pose.x = 4.0;
+                        desired_init_pose.y = -5.0;
+                        desired_init_pose.theta = 0.0;
+                    }
+                    else{
+                        desired_init_pose.x = 3.0;
+                        desired_init_pose.y = -0.5;
+                        desired_init_pose.theta = M_PI;
+                    }
+                    nav_state = MultiFloorNav::State::INIT_POSE;
                 }
                 else{
-                    desired_init_pose.x = 3.0;
-                    desired_init_pose.y = -0.5;
-                    desired_init_pose.theta = M_PI;
+                    ROS_INFO("[Multi Floor Nav] Failed to load map for level %d", desired_map_level);
                 }
-                nav_state = MultiFloorNav::State::INIT_POSE;
-            }
-            else{
-                ROS_INFO("[Multi Floor Nav] Failed to load map for level %d", desired_map_level);
             }
             break;
         case MultiFloorNav::State::INIT_POSE:
             set_init_pose(desired_init_pose);
+            ROS_INFO("[Multi Floor Nav] Initializing Pose to x: %.2f, y ")
             nav_state = MultiFloorNav::State::CHECK_INITPOSE;
             ros::Duration(1.0).sleep();
             break;
@@ -294,7 +298,6 @@ void MultiFloorNav::execute(){
             ROS_INFO_ONCE("Robot arrived at Goal");
             break;
     }
-
 }
 
 double MultiFloorNav::getLoopRate(){
