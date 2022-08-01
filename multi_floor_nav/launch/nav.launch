@@ -54,4 +54,4 @@
     <!-- Run Multi Floor Navigation Node -->
     <node pkg="multi_floor_nav" type="multi_floor_navigation_node" name="multi_floor_navigation_node" output="screen"/>
 
-    </launch>
+</launch>
