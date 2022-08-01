@@ -19,7 +19,7 @@
         <arg name="front_laser" value="$(arg front_laser)" />.0
         <arg name="x_pos" value="0.0"/>
         <arg name="y_pos" value="0.0"/>
-        <arg name="z_pos" value="3.2"/> <!--to change when mapping different level (level 0: 0.5, level 1: 3.2s)-->
+        <arg name="z_pos" value="0.5"/> <!--to change when mapping different level (level 0: 0.5, level 1: 3.2s)-->
     </include>
 
     <include file="$(find jackal_navigation)/launch/gmapping_demo.launch">
