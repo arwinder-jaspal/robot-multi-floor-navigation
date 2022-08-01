@@ -57,8 +57,9 @@ $ catkin_make
 ## Mapping 
 For Mapping, we will use the `gmapping` package from ROS.
 1.  To launch the package:
-```$ sou
-
+```
+$ source ~/catkin_ws/devel/setup,bash
+$ roslaunch multi_floor_nav mapping.launch
 ```
 This will launch RViz and Gazebo for mapping. 
 
@@ -114,4 +115,5 @@ This will launch the few nodes:
 ```
 $ rostopic pub /start std_msgs/Empty "{}"
 ```
-This will start the state machine on `multi_floor_nav_node`
+This will start the state machine on `multi_floor_nav_node`. 
+The purpose for this topic is to allow enough time on slower machines to load visualization tools such as Gazebo.
