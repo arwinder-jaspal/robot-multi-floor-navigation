@@ -96,7 +96,7 @@ $ catkin_make
 ```
 3. Source both the terminal
 ```
-source ~/catkin_ws/devel/setup,bash
+source ~/catkin_ws/devel/setup.bash
 ```
 4. Launch the navigation nodes on the first terminal
 ```
