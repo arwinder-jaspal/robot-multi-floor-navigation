@@ -27,7 +27,6 @@ class MultiFloorNav{
             INIT_POSE,
             CHECK_INITPOSE, 
             NAV_TO_GOAL,
-            ALIGN_ROBOT_LIFT_LEVEL_0,
             SEND_LIFT_0,
             ENTER_LIFT_LEVEL_0, 
             SEND_LIFT_1,
@@ -44,7 +43,6 @@ class MultiFloorNav{
         geometry_msgs::PoseWithCovarianceStamped curr_pose;
         nav_msgs::Odometry curr_odom, first_odom;
         actionlib_msgs::GoalStatusArray move_base_status_msg;
-        geometry_msgs::Quaternion current_yaw, desired_yaw;
         geometry_msgs::Pose2D desired_init_pose, desired_goal_pose;
         multi_floor_nav::IntTrigger srv;
 
@@ -58,8 +56,6 @@ class MultiFloorNav{
         bool check_robot_pose(geometry_msgs::Pose2D pose);
         void send_simple_goal(geometry_msgs::Pose2D goal_pose);
         void send_cmd_vel(double x_vel, double theta_vel);
-        double getYawOffset(geometry_msgs::Quaternion A, geometry_msgs::Quaternion B);
-        void align_yaw(double yaw_offset, double angular_vel);
         void request_lift(std::string floor);
         double dist(geometry_msgs::Point A, geometry_msgs::Point B);
         double length(double x, double y, double z = 0);

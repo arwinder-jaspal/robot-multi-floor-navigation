@@ -1,5 +1,4 @@
 #include <multi_floor_nav/multi_floor_navigation.h>
-// #include "multi_floor_navigation.h"
 
 using namespace std;
 
@@ -82,6 +81,7 @@ void MultiFloorNav::set_init_pose(geometry_msgs::Pose2D pose){
     ROS_INFO("[Multi Floor Nav] Initializing Robot at x: %.1f, y: %.1f, yaw: %.1f", pose.x, pose.y, pose.theta);
     initial_pose_pub.publish(init_pose);
 }
+
 bool MultiFloorNav::check_robot_pose(geometry_msgs::Pose2D pose){
     while (!received_amcl_pose);
     
@@ -100,6 +100,7 @@ bool MultiFloorNav::check_robot_pose(geometry_msgs::Pose2D pose){
     else 
         return false;
 }
+
 void MultiFloorNav::send_simple_goal(geometry_msgs::Pose2D goal_pose){
     geometry_msgs::PoseStamped goal;
 
@@ -132,24 +133,6 @@ void MultiFloorNav::send_cmd_vel(double x_vel=0.0, double theta_vel=0.0){
     cmd_vel_pub.publish(cmd_vel);
 }
 
-double MultiFloorNav::getYawOffset(geometry_msgs::Quaternion A, geometry_msgs::Quaternion B) {
-    tf::Matrix3x3 a_mat(tf::Quaternion(A.x, A.y, A.z, A.w));
-    double a_yaw, a_pitch, a_roll;
-    a_mat.getEulerYPR(a_yaw, a_pitch, a_roll);
-
-    tf::Matrix3x3 b_mat(tf::Quaternion(B.x, B.y, B.z, B.w));
-    double b_yaw, b_pitch, b_roll;
-    b_mat.getEulerYPR(b_yaw, b_pitch, b_roll);
-    return angles::normalize_angle(a_yaw - b_yaw);
-}
-
-void MultiFloorNav::align_yaw(double yaw_offset, double angular_vel){
-    if(yaw_offset>0.0)
-        send_cmd_vel(0.0,-angular_vel);
-    else
-        send_cmd_vel(0.0,angular_vel);
-}
-
 void MultiFloorNav::request_lift(string floor){
     std_msgs::String floor_id;
 
@@ -165,6 +148,7 @@ double MultiFloorNav::dist(geometry_msgs::Point A, geometry_msgs::Point B) {
 double MultiFloorNav::length(double diff_x, double diff_y, double diff_z) {
   return sqrt(diff_x * diff_x + diff_y * diff_y + diff_z * diff_z);
 }
+
 double MultiFloorNav::getPositionOffset(geometry_msgs::Point A, geometry_msgs::Point B) {
   return dist(A, B);
 }   
@@ -204,7 +188,8 @@ void MultiFloorNav::execute(){
             break;
         case MultiFloorNav::State::INIT_POSE:
             set_init_pose(desired_init_pose);
-            ROS_INFO("[Multi Floor Nav] Initializing Pose to x: %.2f, y ")
+            ROS_INFO("[Multi Floor Nav] Initializing Pose to x: %.2f, y: %.2f at level: %d", 
+                        desired_init_pose.x, desired_init_pose.y, desired_map_level);
             nav_state = MultiFloorNav::State::CHECK_INITPOSE;
             ros::Duration(1.0).sleep();
             break;
@@ -220,7 +205,6 @@ void MultiFloorNav::execute(){
             }
             break;
         case MultiFloorNav::State::NAV_TO_GOAL:
-            ROS_INFO_ONCE("[Multi Floor Nav] Will send goal to x: %.f, y: %.f, z: %.f", 3.0, -0.5, 0.5); 
             if(!goal_sent){
                 if(desired_map_level ==0 ){
                     desired_goal_pose.x = 3.0;
@@ -232,6 +216,8 @@ void MultiFloorNav::execute(){
                     desired_goal_pose.y = 5.0;
                     desired_goal_pose.theta = 0.0;    
                 }
+                ROS_INFO_THROTTLE(30, "[Multi Floor Nav] Will send goal to x: %.f, y: %.f, at level: %d", 
+                                desired_goal_pose.x, desired_goal_pose.y, desired_map_level); 
                 send_simple_goal(desired_goal_pose);
                 goal_sent = true;
             }
@@ -250,26 +236,14 @@ void MultiFloorNav::execute(){
                 }
             }
             break;
-        case MultiFloorNav::State::ALIGN_ROBOT_LIFT_LEVEL_0:
-            double yaw_diff;
-            current_yaw = curr_odom.pose.pose.orientation;
-            desired_yaw = tf::createQuaternionMsgFromRollPitchYaw(0.0, 0.0, M_PI);
-            yaw_diff = getYawOffset(current_yaw, desired_yaw);
-            if(abs(yaw_diff) > max_angular_error){
-                align_yaw(yaw_diff, 0.2);
-            }
-            else{
-                send_cmd_vel();
-                nav_state = MultiFloorNav::State::SEND_LIFT_0;
-            }
-            break;
         case MultiFloorNav::State::SEND_LIFT_0:
+            ROS_INFO_ONCE("[Multi Floor Nav] Requesting Lift to Level 0");
             request_lift("0");
             nav_state= MultiFloorNav::State::ENTER_LIFT_LEVEL_0;
             break;
 
         case MultiFloorNav::State::ENTER_LIFT_LEVEL_0:
-            // request_lift("0");
+            ROS_INFO_ONCE("[Multi Floor Nav] Entering Lift at Level 0");
             send_cmd_vel(0.25); 
             if(reached_distance(3.0)){
                 send_cmd_vel();
@@ -279,13 +253,15 @@ void MultiFloorNav::execute(){
             }      
             break;
         case MultiFloorNav::State::SEND_LIFT_1:
+            ROS_INFO("[Multi Floor Nav] Requesting Lift to Level 1");
             request_lift("1");
             ros::Duration(7).sleep(); // wait 7 secs for the lift to travel to level 1 and open
             nav_state= MultiFloorNav::State::EXIT_LIFT_LEVEL_1;
             break;
 
         case MultiFloorNav::State::EXIT_LIFT_LEVEL_1:
-            request_lift("1");
+            // request_lift("1");
+            ROS_INFO_ONCE("[Multi Floor Nav] Exiting Lift at Level 1");
             send_cmd_vel(-0.25); 
             if(reached_distance(3.0)){
                 send_cmd_vel();
@@ -295,7 +271,7 @@ void MultiFloorNav::execute(){
             }
             break;
         case MultiFloorNav::State::DONE:
-            ROS_INFO_ONCE("Robot arrived at Goal");
+            ROS_INFO_ONCE("[Multi Floor Nav] Robot arrived at Goal");
             break;
     }
 }
@@ -316,14 +292,14 @@ int main(int argc, char** argv) {
     }
     ros::Rate loop_rate(rate);
 
-while (ros::ok()) {
-ros::spinOnce();
-multi_floor_nav.execute();
-loop_rate.sleep();
-}
+    while (ros::ok()) {
+        ros::spinOnce();
+        multi_floor_nav.execute();
+        loop_rate.sleep();
+    }
 
-ros::spin();
+    ros::spin();
 
-return (0);
+    return (0);
 }
 
