@@ -1,5 +1,5 @@
 # robot-multi-floor-navigation
-This repository is for Jackal UGV elevator navigation. Demo can be found [here](https://github.com/arwinder-jaspal/robot-multi-floor-navigation/edit/main/README.md#demo)
+This repository is for Jackal UGV elevator navigation. Demo can be found [here](https://github.com/arwinder-jaspal/robot-multi-floor-navigation/blob/main/README.md#demo)
 
 ## Goal 
 In this simultion, we will be using the [Clearpath Jackal](https://clearpathrobotics.com/jackal-small-unmanned-ground-vehicle/) tranverse between 2 floors (floor 0 and floor 1) using an elevator. Few barrier were placed in the world for the UGV to navigate. The simulation world can be found [here](https://bitbucket.org/swaroophs/jackal_elevator/src/master/). 
