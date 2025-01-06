@@ -1,5 +1,5 @@
 # robot-multi-floor-navigation
-This repository is for Jackal UGV elevator navigation.
+This repository is for Jackal UGV elevator navigation. Demo can be found [here](https://github.com/arwinder-jaspal/robot-multi-floor-navigation/edit/main/README.md#demo)
 
 ## Goal 
 In this simultion, we will be using the [Clearpath Jackal](https://clearpathrobotics.com/jackal-small-unmanned-ground-vehicle/) tranverse between 2 floors (floor 0 and floor 1) using an elevator. Few barrier were placed in the world for the UGV to navigate. The simulation world can be found [here](https://bitbucket.org/swaroophs/jackal_elevator/src/master/). 
@@ -117,3 +117,7 @@ $ rostopic pub /start std_msgs/Empty "{}"
 ```
 This will start the state machine on `multi_floor_nav_node`. 
 The purpose for this topic is to allow enough time on slower machines to load visualization tools such as Gazebo.
+
+## Demo 
+https://github.com/user-attachments/assets/d79f4a2a-3cd6-49e2-abfe-5730887da829
+
